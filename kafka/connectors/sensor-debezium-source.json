@@ -1,0 +1,22 @@
+{
+  "name": "sensor-debezium-source",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "db",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "sensor_db",
+    "plugin.name": "pgoutput",
+    "publication.name": "sensor_raw_pub",
+    "table.include.list": "public.sensor_raw",
+    "topic.prefix": "sensor_cdc",
+    "transforms": "extract",
+    "transforms.extract.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.extract.drop.tombstones": "true",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false"
+  }
+}

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-sql
+  namespace: sensor-platform
+data:
+  init_db.sql: |
+    CREATE TABLE IF NOT EXISTS sensor_raw (
+      sensor_id       UUID PRIMARY KEY,
+      vibration_x     DOUBLE PRECISION NOT NULL,
+      vibration_y     DOUBLE PRECISION NOT NULL,
+      vibration_z     DOUBLE PRECISION NOT NULL,
+      ambient_temp    DOUBLE PRECISION NOT NULL,
+      strain_gauge    DOUBLE PRECISION NOT NULL,
+      battery_voltage DOUBLE PRECISION NOT NULL,
+      rssi            INTEGER NOT NULL,
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    DO $$
+    BEGIN
+      CREATE PUBLICATION sensor_raw_pub FOR TABLE sensor_raw;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
