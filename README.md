@@ -1,51 +1,66 @@
 # Sensor Platform
 
-Kubernetes runs on Docker. Create and manage the cluster with one script.
+K8s on Docker. ETL: **Producer** → Postgres CDC → (Kafka) → **ET** → **Load** (later).
+
+## How to run
+
+**1. Postgres (Docker)**  
+Start DB and apply schema once:
+
+```bash
+./scripts/postgres-create.sh start
+./scripts/postgres-run.sh ./db/init_db.sql
+```
+
+**2. Producer (Docker, keeps running)**  
+Build and run in background:
+
+```bash
+./producer/docker.sh build
+./producer/docker.sh run
+```
+
+Logs: `docker logs -f sensor-platform-producer`  
+Stop: `./producer/docker.sh shutdown`
+
+**3. Optional: K8s cluster (minikube)**  
+Create cluster, then deploy (script builds producer image and loads it into minikube):
+
+```bash
+./scripts/k8s-create.sh build
+./scripts/k8s-deploy.sh all      # or: ./scripts/k8s-deploy.sh producer
+```
+
+**Producer not running in K8s?** Check:
+
+```bash
+kubectl get pods -n sensor-platform
+kubectl describe pod -n sensor-platform -l app=producer
+kubectl logs -n sensor-platform -l app=producer --tail=100
+```
+
+- **ImagePullBackOff / ErrImagePull** → Image not in minikube. Run: `./producer/docker.sh build` then `minikube image load sensor-platform-producer:latest`, then `kubectl rollout restart deployment/producer -n sensor-platform`.
+- **CrashLoopBackOff** → Often Postgres unreachable. Ensure Postgres is running on your Mac (`./scripts/postgres-create.sh start`) and that it listens on 0.0.0.0 or that minikube can reach the host (e.g. `host.minikube.internal:5432`). Check logs above for connection errors.
 
 ## Scripts
 
-### k8s-create — cluster on Docker
+| Script | Purpose |
+|--------|--------|
+| `./scripts/k8s-create.sh build \| rebuild \| pause \| unpause \| delete` | Create/manage the **cluster** (minikube); run once (or after delete). |
+| `./scripts/k8s-deploy.sh all \| producer` | **Deploy** apps into the cluster (builds producer image, loads into minikube, then apply). No cluster restart. |
+| `./scripts/postgres-create.sh start \| stop \| restart \| delete` | Postgres container. |
+| `./scripts/postgres-run.sh <file.sql>` | Run a SQL file on the DB. |
 
-```bash
-./scripts/k8s-create.sh build    # create cluster (kind or minikube)
-./scripts/k8s-create.sh rebuild  # delete then create again
-./scripts/k8s-create.sh pause   # stop cluster (minikube only)
-./scripts/k8s-create.sh unpause # start again (minikube only)
-./scripts/k8s-create.sh delete  # remove cluster
-```
-
-### postgres-create — Postgres service on Docker
-
-```bash
-./scripts/postgres-create.sh start   # run Postgres (port 5432, DB sensor_platform, wal_level=logical)
-./scripts/postgres-create.sh stop    # stop container
-./scripts/postgres-create.sh restart # stop then start
-./scripts/postgres-create.sh delete  # remove container and volume
-```
-
-Optional env: `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_CONTAINER`, `POSTGRES_VOLUME`.
-
-### postgres-run — run a SQL file on the database
-
-```bash
-./scripts/postgres-run.sh ./db/init_db.sql   # run that SQL file on the DB
-```
-
-Postgres container must be running (`./scripts/postgres-create.sh start`). Uses same env as postgres-create for container name and DB.
-
-## Module: sensors table
-
-Defined in `db/init_db.sql`. Columns: `id`, `name`, `sensor_type`, `location`, `latitude`, `longitude`, `value`, `value_min`, `value_max`, `unit`, `status`, `created_at`, `updated_at`, `metadata` (JSONB). Seeded with 100 sensors (types: temperature, humidity, pressure, light, co2, motion, noise, voltage; locations like building/floor; metadata: zone, building, room).
-
-## Project structure
+## Project layout
 
 ```
 Sensor_platform/
-├── db/
-│   └── init_db.sql         # sensors table + 100 rows
-├── scripts/
-│   ├── k8s-create.sh
-│   ├── postgres-create.sh
-│   └── postgres-run.sh
+├── db/           # init_db.sql (sensors table)
+├── et/           # Extract–Transform (placeholder)
+├── k8s/          # namespace + deployment-producer
+├── producer/     # Producer app + docker.sh; see producer/README.md
+├── scripts/      # k8s-create, k8s-deploy, postgres-create, postgres-run
 └── README.md
 ```
+
+For producer details (files, env, run options), see **producer/README.md**.
