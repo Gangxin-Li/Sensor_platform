@@ -15,17 +15,38 @@ CREATE TABLE IF NOT EXISTS sensors (
     status          VARCHAR(32) DEFAULT 'active',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version         INTEGER NOT NULL DEFAULT 1,
     metadata        JSONB DEFAULT '{}'
 );
 
+ALTER TABLE sensors ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
+CREATE OR REPLACE FUNCTION sensors_bump_version() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.version := OLD.version + 1;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS sensors_version_trigger ON sensors;
+CREATE TRIGGER sensors_version_trigger
+  BEFORE UPDATE ON sensors
+  FOR EACH ROW
+  EXECUTE PROCEDURE sensors_bump_version();
+
 CREATE INDEX IF NOT EXISTS idx_sensors_updated_at ON sensors(updated_at);
+CREATE INDEX IF NOT EXISTS idx_sensors_version ON sensors(version);
 CREATE INDEX IF NOT EXISTS idx_sensors_type ON sensors(sensor_type);
 CREATE INDEX IF NOT EXISTS idx_sensors_location ON sensors(location);
 CREATE INDEX IF NOT EXISTS idx_sensors_status ON sensors(status);
 
+-- Publication for CDC (Debezium / logical replication).
+DROP PUBLICATION IF EXISTS sensor_cdc;
+CREATE PUBLICATION sensor_cdc FOR TABLE sensors;
+
 INSERT INTO sensors (
     id, name, sensor_type, location, latitude, longitude,
-    value, value_min, value_max, unit, status, metadata
+    value, value_min, value_max, unit, status, version, metadata
 )
 SELECT
     n,
@@ -46,6 +67,7 @@ SELECT
         ELSE 'raw'
     END,
     'active',
+    1,
     jsonb_build_object(
         'zone', (n % 5),
         'building', (n % 3),
