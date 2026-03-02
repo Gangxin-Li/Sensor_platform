@@ -5,7 +5,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
-
+ 
 IMAGE_NAME="${CONSUMER_IMAGE:-sensor-platform-consumer:latest}"
 CONTAINER_NAME="${CONSUMER_CONTAINER:-sensor-platform-consumer}"
 
@@ -13,7 +13,7 @@ usage() {
   echo "Usage: $0 <build|rebuild|run|shutdown>"
   echo "  build    - docker build image $IMAGE_NAME"
   echo "  rebuild  - docker build --no-cache"
-  echo "  run      - run container (detached); connect to Kafka on host via host.docker.internal:9092"
+  echo "  run      - run container (detached); connect to Kafka in docker-compose network (kafka:29092)"
   echo "  shutdown - stop and remove container $CONTAINER_NAME"
   exit 1
 }
@@ -40,7 +40,8 @@ case "$cmd" in
     echo "Running $CONTAINER_NAME (detached)..."
     docker run -d \
       --name "$CONTAINER_NAME" \
-      -e KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-host.docker.internal:9092}" \
+      --network sensor_platform_kafka_network \
+      -e KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}" \
       -e KAFKA_TOPIC="${KAFKA_TOPIC:-dbserver1.public.sensors}" \
       -e KAFKA_GROUP_ID="${KAFKA_GROUP_ID:-sensor-consumer-et}" \
       "$IMAGE_NAME"

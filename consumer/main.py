@@ -58,18 +58,34 @@ def main():
                     continue
                 raise KafkaException(msg.error())
             try:
-                value = json.loads(msg.value().decode("utf-8"))
-                op = value.get("op", "?")
-                before = value.get("before")
-                after = value.get("after")
-                source = value.get("source", {})
-                ts_ms = source.get("ts_ms")
+                raw = msg.value().decode("utf-8")
+                value = json.loads(raw)
+
+                # Debezium with JsonConverter usually wraps data in a top-level "payload".
+                # Fall back to top-level if there is no payload key.
+                payload = value.get("payload", value)
+
+                op = payload.get("op", "?") if isinstance(payload, dict) else "?"
+                before = payload.get("before") if isinstance(payload, dict) else None
+                after = payload.get("after") if isinstance(payload, dict) else None
+                source = payload.get("source", {}) if isinstance(payload, dict) else {}
+                ts_ms = payload.get("ts_ms") if isinstance(payload, dict) else None
                 table = source.get("table", "?")
-                op_label = {"c": "INSERT", "u": "UPDATE", "r": "READ", "d": "DELETE"}.get(op, op)
-                logger.info(
-                    "CDC %s table=%s ts_ms=%s before=%s after=%s",
-                    op_label, table, ts_ms, before, after,
-                )
+
+                # If there is no meaningful CDC payload, log raw once and skip.
+                if op == "?" and before is None and after is None:
+                    logger.info("CDC RAW (no op/before/after): %s", raw)
+                    continue
+
+                record = {
+                    "op": op,
+                    "ts_ms": ts_ms,
+                    "table": table,
+                    "before": before,
+                    "after": after,
+                    "source": source,
+                }
+                logger.info("CDC RECORD: %s", json.dumps(record, ensure_ascii=False))
             except (json.JSONDecodeError, AttributeError) as e:
                 logger.warning("Invalid message: %s", e)
     except KafkaException as e:

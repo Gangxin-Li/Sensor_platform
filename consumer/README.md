@@ -2,11 +2,14 @@
 
 This app is the **ET (Extract–Transform)** step: it **consumes** change events from Kafka that were produced by **Debezium** from Postgres.
 
+- **Extraction (implemented)**: subscribe to the Debezium CDC topic, parse the JSON envelope (`before/after/op/source/...`), and log a normalized `CDC RECORD` structure.
+- **Transformation (not yet implemented)**: you can extend `main.py` to transform these records (e.g. filter fields, enrich data, aggregate) and load them into another system (DB, API, data warehouse).
+
 ## How it works
 
 1. **Postgres** holds the `sensors` table. When rows are inserted/updated/deleted, Postgres writes to the WAL.
 2. **Debezium Connect** (in the Kafka stack) reads the WAL via the `sensor_cdc` publication and sends each change to the Kafka topic **`dbserver1.public.sensors`**.
-3. **This consumer** subscribes to that topic and prints each event (Extract). You can add Transform and Load (e.g. write to another DB or API) later.
+3. **This consumer** subscribes to that topic and performs **Extraction**: it parses each message into a structured Python dict (`CDC RECORD`) and logs it. You can add Transform and Load (e.g. write to another DB or API) later.
 
 So: **Kafka is used to read Postgres changes** – Debezium pushes CDC into Kafka, and this process reads from Kafka.
 
