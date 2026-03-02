@@ -32,7 +32,8 @@ services:
     networks:
       - kafka_network
 
-  # 3. Kafka Broker (exposed on localhost:9092 and kafka:29092 for containers)
+  # 3. Kafka Broker
+  # - kafka:29092 (in-cluster), localhost:9092 (host), host.minikube.internal:9093 (minikube pods, same pattern as producer→Postgres)
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
@@ -40,11 +41,13 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+      - "9093:9093"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092,PLAINTEXT_K8S://host.minikube.internal:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_K8S:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_K8S://0.0.0.0:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -75,8 +78,10 @@ services:
     networks:
       - kafka_network
 
+# Explicit network name so all services + consumer use the same network (must match consumer: --network sensor_platform_kafka_network).
 networks:
   kafka_network:
+    name: sensor_platform_kafka_network
     driver: bridge
 
 volumes:

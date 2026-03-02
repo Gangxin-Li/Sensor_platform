@@ -21,7 +21,7 @@ So: **Kafka is used to read Postgres changes** – Debezium pushes CDC into Kafk
 
 ## Prerequisites
 
-- Kafka stack running: `./scripts/postgres-create.sh start`
+- Kafka stack running: `./scripts/start-stack.sh` (then `./scripts/register-connector.sh`)
 - Postgres with `sensors` and publication `sensor_cdc` (see `db/init_db.sql`)
 - Some changes in `sensors` (e.g. run the producer so that Debezium has events to stream)
 

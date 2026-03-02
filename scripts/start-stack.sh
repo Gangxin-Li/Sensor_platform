@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 1. Start Postgres only
-# 2. Run db/init_db.sql
-# 3. Start Zookeeper, Kafka, Connect
+# Start infra: 1) Postgres, 2) run db/init_db.sql, 3) Zookeeper + Kafka + Connect.
+# Run from project root. After this, run: ./scripts/register-connector.sh
+# Network in docker-compose: sensor_platform_kafka_network (explicit name).
 # Usage: ./scripts/start-stack.sh
 set -e
 
