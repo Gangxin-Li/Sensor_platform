@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-CONTAINER_NAME="${POSTGRES_CONTAINER:-sensor-platform-postgres}"
+CONTAINER_NAME="${POSTGRES_CONTAINER:-postgres_db}"
 DB_NAME="${POSTGRES_DB:-sensor_platform}"
 DB_USER="${POSTGRES_USER:-postgres}"
 
@@ -18,7 +18,7 @@ if [[ ! -f "$file" ]]; then
 fi
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
-  echo "Error: Container $CONTAINER_NAME is not running. Start with: ./scripts/postgres-create.sh start"
+  echo "Error: Container $CONTAINER_NAME is not running. Start Postgres with: ./scripts/start-stack.sh (or: docker compose up -d postgres)"
   exit 1
 fi
 

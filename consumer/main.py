@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Consumer (ET): read Postgres CDC events from Kafka.
-Debezium writes changes from the sensors table to the topic dbserver1.public.sensors.
-This script consumes that topic and logs each change (Extract). Transform/Load can be added later.
+Consumer (ETL): read Postgres CDC events from Kafka, transform (outlier filter),
+load into sensor_etl_load (current state) and sensor_etl_events (append-only history).
 """
 import json
 import logging
 import os
 import signal
 import sys
+from datetime import datetime, timezone
 
+import psycopg2
 from confluent_kafka import Consumer, KafkaError, KafkaException
 
 logging.basicConfig(
@@ -23,12 +24,177 @@ KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "dbserver1.public.sensors")
 KAFKA_GROUP = os.getenv("KAFKA_GROUP_ID", "sensor-consumer-et")
 
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "sensor_platform")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
+LOAD_TABLE = os.getenv("LOAD_TABLE", "sensor_etl_load")
+LOAD_EVENTS_TABLE = os.getenv("LOAD_EVENTS_TABLE", "sensor_etl_events")
+
 _running = True
 
 
 def _sig_handler(*_):
     global _running
     _running = False
+
+
+def _numeric(v):
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_metadata(v):
+    if v is None:
+        return "{}"
+    if isinstance(v, dict):
+        return json.dumps(v)
+    if isinstance(v, str):
+        return v
+    return "{}"
+
+
+def load_into_postgres(conn, after: dict) -> None:
+    """Upsert one row into sensor_etl_load (Load step)."""
+    if not after or not isinstance(after, dict):
+        return
+    try:
+        id_ = after.get("id")
+        if id_ is None:
+            return
+        name = after.get("name") or ""
+        sensor_type = after.get("sensor_type") or ""
+        location = after.get("location")
+        latitude = _numeric(after.get("latitude"))
+        longitude = _numeric(after.get("longitude"))
+        value = _numeric(after.get("value")) if after.get("value") is not None else 0.0
+        value_min = _numeric(after.get("value_min")) if after.get("value_min") is not None else 0.0
+        value_max = _numeric(after.get("value_max")) if after.get("value_max") is not None else 100.0
+        unit = after.get("unit") or ""
+        status = after.get("status") or "active"
+        created_at = after.get("created_at")
+        updated_at = after.get("updated_at")
+        version = after.get("version")
+        if version is None:
+            version = 1
+        try:
+            version = int(version)
+        except (TypeError, ValueError):
+            version = 1
+        metadata = _parse_metadata(after.get("metadata"))
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO sensor_etl_load (
+                    id, name, sensor_type, location, latitude, longitude,
+                    value, value_min, value_max, unit, status,
+                    created_at, updated_at, version, metadata, loaded_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s::timestamptz, %s::timestamptz, %s, %s::jsonb, NOW()
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    sensor_type = EXCLUDED.sensor_type,
+                    location = EXCLUDED.location,
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    value = EXCLUDED.value,
+                    value_min = EXCLUDED.value_min,
+                    value_max = EXCLUDED.value_max,
+                    unit = EXCLUDED.unit,
+                    status = EXCLUDED.status,
+                    updated_at = EXCLUDED.updated_at,
+                    version = EXCLUDED.version,
+                    metadata = EXCLUDED.metadata,
+                    loaded_at = NOW()
+                """,
+                (
+                    id_, name, sensor_type, location, latitude, longitude,
+                    value, value_min, value_max, unit, status,
+                    created_at, updated_at, version, metadata,
+                ),
+            )
+        conn.commit()
+    except Exception as e:
+        logger.exception("Load into Postgres failed: %s", e)
+        conn.rollback()
+
+
+def _event_time_from_payload(ts_ms, updated_at_str):
+    """Derive event_time from payload ts_ms (preferred) or updated_at string."""
+    if ts_ms is not None:
+        try:
+            return datetime.fromtimestamp(int(ts_ms) / 1000.0, tz=timezone.utc)
+        except (TypeError, ValueError, OSError):
+            pass
+    if updated_at_str:
+        return updated_at_str  # pass through for ::timestamptz in SQL
+    return None
+
+
+def load_event_into_postgres(conn, after: dict, op: str, ts_ms) -> None:
+    """Append one row to sensor_etl_events (incremental history, append-only)."""
+    if not after or not isinstance(after, dict):
+        return
+    if op not in ("c", "u", "r", "d"):
+        return
+    try:
+        id_ = after.get("id")
+        if id_ is None:
+            return
+        name = after.get("name") or ""
+        sensor_type = after.get("sensor_type") or ""
+        location = after.get("location")
+        latitude = _numeric(after.get("latitude"))
+        longitude = _numeric(after.get("longitude"))
+        value = _numeric(after.get("value")) if after.get("value") is not None else 0.0
+        value_min = _numeric(after.get("value_min")) if after.get("value_min") is not None else 0.0
+        value_max = _numeric(after.get("value_max")) if after.get("value_max") is not None else 100.0
+        unit = after.get("unit") or ""
+        status = after.get("status") or "active"
+        created_at = after.get("created_at")
+        updated_at = after.get("updated_at")
+        version = after.get("version")
+        if version is None:
+            version = 1
+        try:
+            version = int(version)
+        except (TypeError, ValueError):
+            version = 1
+        metadata = _parse_metadata(after.get("metadata"))
+        event_time = _event_time_from_payload(ts_ms, updated_at)
+        if event_time is None:
+            event_time = updated_at or created_at
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO sensor_etl_events (
+                    sensor_id, op, event_time, name, sensor_type, location, latitude, longitude,
+                    value, value_min, value_max, unit, status,
+                    created_at, updated_at, version, metadata, loaded_at
+                ) VALUES (
+                    %s, %s, %s::timestamptz, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s::timestamptz, %s::timestamptz, %s, %s::jsonb, NOW()
+                )
+                """,
+                (
+                    id_, op, event_time, name, sensor_type, location, latitude, longitude,
+                    value, value_min, value_max, unit, status,
+                    created_at, updated_at, version, metadata,
+                ),
+            )
+        conn.commit()
+    except Exception as e:
+        logger.exception("Load event into Postgres failed: %s", e)
+        conn.rollback()
 
 
 def is_extreme_outlier(after: dict) -> bool:
@@ -56,6 +222,19 @@ def is_extreme_outlier(after: dict) -> bool:
 def main():
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
+
+    logger.info(
+        "Connecting to Postgres %s:%s/%s for Load tables %s (state) + %s (events)",
+        POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, LOAD_TABLE, LOAD_EVENTS_TABLE,
+    )
+    pg_conn = psycopg2.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        dbname=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+    )
+    pg_conn.autocommit = False
 
     conf = {
         "bootstrap.servers": KAFKA_BOOTSTRAP,
@@ -113,6 +292,15 @@ def main():
                     continue
 
                 logger.info("CDC RECORD (clean): %s", json.dumps(record, ensure_ascii=False))
+
+                # Load step: state table (upsert) + events table (append-only).
+                if after and payload.get("op") in ("c", "u", "r"):
+                    load_into_postgres(pg_conn, after)
+                    load_event_into_postgres(
+                        pg_conn, after,
+                        payload.get("op", "u"),
+                        payload.get("ts_ms"),
+                    )
             except (json.JSONDecodeError, AttributeError) as e:
                 logger.warning("Invalid message: %s", e)
     except KafkaException as e:
@@ -120,6 +308,8 @@ def main():
         sys.exit(1)
     finally:
         consumer.close()
+        if pg_conn:
+            pg_conn.close()
         logger.info("Consumer stopped.")
 
 

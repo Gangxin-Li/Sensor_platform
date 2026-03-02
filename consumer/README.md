@@ -3,7 +3,13 @@
 This app is the **ET (Extract–Transform)** step: it **consumes** change events from Kafka that were produced by **Debezium** from Postgres.
 
 - **Extraction (implemented)**: subscribe to the Debezium CDC topic, parse the JSON envelope (`before/after/op/source/...`), and log a normalized `CDC RECORD` structure.
-- **Transformation (not yet implemented)**: you can extend `main.py` to transform these records (e.g. filter fields, enrich data, aggregate) and load them into another system (DB, API, data warehouse).
+- **Transformation (implemented)**: extreme outlier filter based on `value` vs `value_min`/`value_max`; filtered records are logged only, not loaded.
+- **Load (implemented)**: cleaned records are written to two tables in the same DB (`sensor_platform`):
+  - **`sensor_etl_load`**: current state (upsert by `id`).
+  - **`sensor_etl_events`**: append-only history (one row per CDC event).
+  Create the tables separately:  
+  `./scripts/postgres-run.sh ./db/init_load_table.sql`  
+  `./scripts/postgres-run.sh ./db/init_load_events_table.sql`
 
 ## How it works
 
@@ -15,7 +21,7 @@ So: **Kafka is used to read Postgres changes** – Debezium pushes CDC into Kafk
 
 ## Prerequisites
 
-- Kafka stack running: `./scripts/kafka-create.sh start`
+- Kafka stack running: `./scripts/postgres-create.sh start`
 - Postgres with `sensors` and publication `sensor_cdc` (see `db/init_db.sql`)
 - Some changes in `sensors` (e.g. run the producer so that Debezium has events to stream)
 
@@ -35,6 +41,12 @@ Stop with Ctrl+C.
 | KAFKA_BOOTSTRAP_SERVERS | localhost:9092 | Kafka brokers |
 | KAFKA_TOPIC | dbserver1.public.sensors | Debezium topic (schema.table) |
 | KAFKA_GROUP_ID | sensor-consumer-et | Consumer group |
+| POSTGRES_HOST | localhost | Postgres host for Load (use `postgres` when consumer runs in Docker on same compose network) |
+| POSTGRES_PORT | 5432 | Postgres port |
+| POSTGRES_DB | sensor_platform | Database name |
+| POSTGRES_USER / POSTGRES_PASSWORD | postgres | Credentials for Load tables |
+| LOAD_TABLE | sensor_etl_load | State table (upsert by id) |
+| LOAD_EVENTS_TABLE | sensor_etl_events | Events table (append-only history) |
 
 For Docker or K8s, set `KAFKA_BOOTSTRAP_SERVERS` to the in-cluster Kafka address (e.g. `kafka:29092` if inside the same Docker network).
 

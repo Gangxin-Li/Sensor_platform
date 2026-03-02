@@ -44,6 +44,11 @@ case "$cmd" in
       -e KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}" \
       -e KAFKA_TOPIC="${KAFKA_TOPIC:-dbserver1.public.sensors}" \
       -e KAFKA_GROUP_ID="${KAFKA_GROUP_ID:-sensor-consumer-et}" \
+      -e POSTGRES_HOST="${POSTGRES_HOST:-postgres}" \
+      -e POSTGRES_PORT="${POSTGRES_PORT:-5432}" \
+      -e POSTGRES_DB="${POSTGRES_DB:-sensor_platform}" \
+      -e POSTGRES_USER="${POSTGRES_USER:-postgres}" \
+      -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}" \
       "$IMAGE_NAME"
     echo "Done. Logs: docker logs -f $CONTAINER_NAME"
     ;;
