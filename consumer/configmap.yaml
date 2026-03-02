@@ -1,0 +1,21 @@
+# Consumer config for K8s. Edit the data section to change behaviour without touching code.
+# Then: kubectl apply -f consumer/configmap.yaml && kubectl rollout restart deployment/consumer -n sensor-platform
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consumer-config
+  namespace: sensor-platform
+data:
+  # Kafka (for K8s use host.minikube.internal)
+  KAFKA_BOOTSTRAP_SERVERS: "host.minikube.internal:9093"
+  KAFKA_TOPIC: "dbserver1.public.sensors"
+  KAFKA_GROUP_ID: "sensor-consumer-et"
+  # Postgres
+  POSTGRES_HOST: "host.minikube.internal"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "sensor_platform"
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "postgres"
+  # Load tables (state + events)
+  LOAD_TABLE: "sensor_etl_load"
+  LOAD_EVENTS_TABLE: "sensor_etl_events"

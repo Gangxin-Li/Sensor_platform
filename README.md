@@ -76,7 +76,7 @@ kubectl logs -n sensor-platform -l app=producer --tail=100
 | `./scripts/register-connector.sh` | Register Debezium Postgres CDC connector (run after stack is up; optional env: `CONNECT_URL`, `POSTGRES_*`). |
 | `./scripts/postgres-run.sh <file.sql>` | Run a SQL file on the Postgres DB (e.g. `./db/init_load_table.sql`). Container: `postgres_db`, DB: `sensor_platform`. |
 | `./scripts/k8s-create.sh build \| rebuild \| pause \| unpause \| delete` | Create/manage the **cluster** (minikube); run once (or after delete). |
-| `./scripts/k8s-deploy.sh all \| producer \| consumer` | **Deploy** apps (build + load image, apply). Producer and consumer both use host.minikube.internal for host services. |
+| `./scripts/k8s-deploy.sh all \| producer \| consumer` | **Deploy** apps (build + load image, apply). Env: producer from `producer/configmap.yaml`, consumer from `consumer/configmap.yaml`; edit those to change params without touching code. |
 
 ## Project layout
 
@@ -84,7 +84,7 @@ kubectl logs -n sensor-platform -l app=producer --tail=100
 Sensor_platform/
 ├── db/                  # init_db.sql (sensors + publication); init_load_table.sql; init_load_events_table.sql
 ├── consumer/            # ETL consumer; docker.sh uses network sensor_platform_kafka_network
-├── k8s/                 # namespace (sensor-platform) + deployment-producer + deployment-consumer
+├── k8s/                 # namespace + deployment-producer, deployment-consumer (env from each app’s configmap)
 ├── producer/            # Producer app + docker.sh; see producer/README.md
 ├── scripts/             # start-stack, register-connector, postgres-run, k8s-create, k8s-deploy
 ├── docker-compose.yml   # name: sensor-platform; Postgres, Zookeeper, Kafka, Connect

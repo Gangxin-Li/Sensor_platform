@@ -50,19 +50,25 @@ case "$target" in
   all)
     ensure_producer_image
     ensure_consumer_image
-    echo "Deploying all (k8s/)..."
-    kubectl apply -f k8s/
+    echo "Deploying all (namespace, configmaps, deployments)..."
+    kubectl apply -f k8s/namespace.yaml
+    kubectl apply -f producer/configmap.yaml
+    kubectl apply -f consumer/configmap.yaml
+    kubectl apply -f k8s/deployment-producer.yaml
+    kubectl apply -f k8s/deployment-consumer.yaml
     ;;
   producer)
     ensure_producer_image
     echo "Deploying producer..."
     kubectl apply -f k8s/namespace.yaml
+    kubectl apply -f producer/configmap.yaml
     kubectl apply -f k8s/deployment-producer.yaml
     ;;
   consumer)
     ensure_consumer_image
     echo "Deploying consumer..."
     kubectl apply -f k8s/namespace.yaml
+    kubectl apply -f consumer/configmap.yaml
     kubectl apply -f k8s/deployment-consumer.yaml
     ;;
   *)

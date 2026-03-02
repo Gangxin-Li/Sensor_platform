@@ -1,7 +1,5 @@
 # Consumer (ETL): reads CDC from Kafka, transform, load into sensor_etl_load + sensor_etl_events.
-# Build on host: docker build -t sensor-platform-consumer:latest ./consumer
-# Load into minikube: minikube image load sensor-platform-consumer:latest
-# Same as producer: Kafka and Postgres on host, use host.minikube.internal (9093 for Kafka, 5432 for Postgres).
+# Env from consumer/configmap.yaml (ConfigMap consumer-config). Edit that file to change params.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,23 +21,9 @@ spec:
         - name: consumer
           image: sensor-platform-consumer:latest
           imagePullPolicy: IfNotPresent
-          env:
-            - name: KAFKA_BOOTSTRAP_SERVERS
-              value: "host.minikube.internal:9093"
-            - name: KAFKA_TOPIC
-              value: "dbserver1.public.sensors"
-            - name: KAFKA_GROUP_ID
-              value: "sensor-consumer-et"
-            - name: POSTGRES_HOST
-              value: "host.minikube.internal"
-            - name: POSTGRES_PORT
-              value: "5432"
-            - name: POSTGRES_DB
-              value: sensor_platform
-            - name: POSTGRES_USER
-              value: postgres
-            - name: POSTGRES_PASSWORD
-              value: postgres
+          envFrom:
+            - configMapRef:
+                name: consumer-config
           resources:
             requests:
               memory: "128Mi"

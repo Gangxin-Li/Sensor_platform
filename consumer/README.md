@@ -48,6 +48,8 @@ Stop with Ctrl+C.
 | LOAD_TABLE | sensor_etl_load | State table (upsert by id) |
 | LOAD_EVENTS_TABLE | sensor_etl_events | Events table (append-only history) |
 
+**K8s:** Env is loaded from `consumer/configmap.yaml`. Edit that file to change Kafka/Postgres/load table params without touching code; then `kubectl apply -f consumer/configmap.yaml` and `kubectl rollout restart deployment/consumer -n sensor-platform`.
+
 For Docker or K8s, set `KAFKA_BOOTSTRAP_SERVERS` to the in-cluster Kafka address (e.g. `kafka:29092` if inside the same Docker network).
 
 ## Message format

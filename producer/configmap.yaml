@@ -1,0 +1,19 @@
+# Producer config for K8s. Edit the data section to change behaviour without touching code.
+# Then: kubectl apply -f producer/configmap.yaml && kubectl rollout restart deployment/producer -n sensor-platform
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: producer-config
+  namespace: sensor-platform
+data:
+  # Postgres (for K8s use host.minikube.internal)
+  POSTGRES_HOST: "host.minikube.internal"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "sensor_platform"
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "postgres"
+  # How often to run (seconds)
+  PRODUCER_INTERVAL_SEC: "1"
+  # Min/max number of sensors to update per run (e.g. 5–10 per second)
+  PRODUCER_MIN_UPDATES: "5"
+  PRODUCER_MAX_UPDATES: "10"

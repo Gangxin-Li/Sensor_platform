@@ -10,6 +10,7 @@ Simulates sensor updates in Postgres: every second it updates 5–10 random rows
 | **requirements.txt** | Dependencies: `psycopg2-binary`. |
 | **Dockerfile** | Image for running in Docker or K8s (Python 3.11, non-root user). |
 | **docker.sh** | Script: `build` \| `rebuild` \| `run` \| `shutdown` for the producer image/container. |
+| **configmap.yaml** | K8s ConfigMap: edit this file to change Postgres and producer params (interval, min/max updates) without touching code. Used when deploying to K8s. |
 
 ## Environment variables
 
@@ -30,4 +31,4 @@ Simulates sensor updates in Postgres: every second it updates 5–10 random rows
 
 **Local Python (foreground):** `pip install -r producer/requirements.txt` and `POSTGRES_HOST=localhost python producer/main.py` (Postgres must be running and have the `sensors` table).
 
-**K8s (minikube):** build image, `minikube image load sensor-platform-producer:latest`, then `kubectl apply -f k8s/namespace.yaml` and `kubectl apply -f k8s/deployment-producer.yaml`. See project README for full steps.
+**K8s (minikube):** `./scripts/k8s-deploy.sh producer`. Env is loaded from `producer/configmap.yaml`; edit that file to change interval or min/max updates, then re-apply and restart.

@@ -1,7 +1,5 @@
-# Producer: updates 5-10 random sensors per second in Postgres (for CDC).
-# Build on host: docker build -t sensor-platform-producer:latest ./producer
-# Load into minikube: minikube image load sensor-platform-producer:latest
-# Postgres on host: POSTGRES_HOST=host.minikube.internal so pods in minikube can reach it.
+# Producer: updates random sensors in Postgres (for CDC).
+# Env from producer/configmap.yaml (ConfigMap producer-config). Edit that file to change params.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,23 +21,9 @@ spec:
         - name: producer
           image: sensor-platform-producer:latest
           imagePullPolicy: IfNotPresent
-          env:
-            - name: POSTGRES_HOST
-              value: "host.minikube.internal"
-            - name: POSTGRES_PORT
-              value: "5432"
-            - name: POSTGRES_DB
-              value: sensor_platform
-            - name: POSTGRES_USER
-              value: postgres
-            - name: POSTGRES_PASSWORD
-              value: postgres
-            - name: PRODUCER_INTERVAL_SEC
-              value: "1"
-            - name: PRODUCER_MIN_UPDATES
-              value: "5"
-            - name: PRODUCER_MAX_UPDATES
-              value: "10"
+          envFrom:
+            - configMapRef:
+                name: producer-config
           resources:
             requests:
               memory: "64Mi"
