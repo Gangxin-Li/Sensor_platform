@@ -31,6 +31,28 @@ def _sig_handler(*_):
     _running = False
 
 
+def is_extreme_outlier(after: dict) -> bool:
+    """
+    Simple transformation rule:
+    - Treat a reading as an outlier if `value` is far outside the configured [value_min, value_max] range.
+    - Margin is +/-10 units beyond the stored range.
+    """
+    if not isinstance(after, dict):
+        return False
+    try:
+        value = after.get("value")
+        value_min = after.get("value_min", 0.0)
+        value_max = after.get("value_max", 100.0)
+        if value is None:
+            return False
+        margin = 10.0
+        if value < (value_min - margin) or value > (value_max + margin):
+            return True
+    except TypeError:
+        return False
+    return False
+
+
 def main():
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
@@ -85,7 +107,12 @@ def main():
                     "after": after,
                     "source": source,
                 }
-                logger.info("CDC RECORD: %s", json.dumps(record, ensure_ascii=False))
+                # Transformation step: filter out extreme outliers based on value/value_min/value_max.
+                if after and is_extreme_outlier(after):
+                    logger.info("CDC FILTERED OUTLIER: %s", json.dumps(record, ensure_ascii=False))
+                    continue
+
+                logger.info("CDC RECORD (clean): %s", json.dumps(record, ensure_ascii=False))
             except (json.JSONDecodeError, AttributeError) as e:
                 logger.warning("Invalid message: %s", e)
     except KafkaException as e:
