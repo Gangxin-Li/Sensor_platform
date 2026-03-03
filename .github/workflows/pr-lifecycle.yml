@@ -1,0 +1,47 @@
+name: PR lifecycle
+
+on:
+  pull_request:
+    types: [closed, reopened]
+
+jobs:
+  cleanup-and-notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete feature branch after merge
+        if: >
+          github.event.action == 'closed' &&
+          github.event.pull_request.merged == true &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.head.ref != 'main' &&
+          github.event.pull_request.head.ref != 'master'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="${{ github.event.pull_request.head.ref }}"
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          echo "Deleting branch $branch on $owner/$repo ..."
+          curl -sS -X DELETE \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}" \
+            || echo "Branch delete request returned non-zero (maybe already deleted)."
+
+      - name: Comment when PR is reopened
+        if: github.event.action == 'reopened'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          body='{"body":"PR reopened. Tests and CI checks will run again."}'
+          echo "Commenting on PR #$pr_number ..."
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$body" \
+            "https://api.github.com/repos/${owner}/${repo}/issues/${pr_number}/comments"
+
