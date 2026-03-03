@@ -5,6 +5,10 @@ on:
     # Only care about PR closed events.
     types: [closed]
 
+permissions:
+  contents: write
+  pull-requests: read
+
 jobs:
   delete-branch-after-merge:
     runs-on: ubuntu-latest
