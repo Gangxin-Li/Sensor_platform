@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DB_DIR = ROOT / "db"
 
 
+
 def _parse_columns_from_create(path: Path, table_name: str) -> List[str]:
     """
     Very small SQL parser to extract column names from a CREATE TABLE block.
